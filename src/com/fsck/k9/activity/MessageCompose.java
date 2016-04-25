@@ -1,23 +1,6 @@
 package com.fsck.k9.activity;
 
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
-import java.text.DateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.StringTokenizer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.AlertDialog;
@@ -83,8 +66,14 @@ import com.fsck.k9.activity.misc.Attachment;
 import com.fsck.k9.controller.MessagingController;
 import com.fsck.k9.controller.MessagingListener;
 import com.fsck.k9.crypto.CryptoProvider;
+import com.fsck.k9.crypto.ECCElgamal.ECCEG;
+import com.fsck.k9.crypto.ECCElgamal.EllipticalCurve;
+import com.fsck.k9.crypto.ECCElgamal.IOUtils;
+import com.fsck.k9.crypto.ECCElgamal.Utils;
 import com.fsck.k9.crypto.OpenPgpApiHelper;
 import com.fsck.k9.crypto.PgpData;
+import com.fsck.k9.crypto.SHA1;
+import com.fsck.k9.crypto.TriadPrimus.TriadPrimus;
 import com.fsck.k9.fragment.ProgressDialogFragment;
 import com.fsck.k9.helper.ContactItem;
 import com.fsck.k9.helper.Contacts;
@@ -122,6 +111,26 @@ import org.openintents.openpgp.OpenPgpError;
 import org.openintents.openpgp.util.OpenPgpApi;
 import org.openintents.openpgp.util.OpenPgpServiceConnection;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.math.BigInteger;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.text.DateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.StringTokenizer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 public class MessageCompose extends K9Activity implements OnClickListener,
         ProgressDialogFragment.CancelListener {
 
@@ -130,6 +139,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     private static final int DIALOG_CONTINUE_WITHOUT_PUBLIC_KEY = 3;
     private static final int DIALOG_CONFIRM_DISCARD_ON_BACK = 4;
     private static final int DIALOG_CHOOSE_IDENTITY = 5;
+    private static final int PICK_KEY_REQUEST=6;
 
     private static final long INVALID_DRAFT_ID = MessagingController.INVALID_MESSAGE_ID;
 
@@ -193,6 +203,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     private static final Account[] EMPTY_ACCOUNT_ARRAY = new Account[0];
 
     private static final int REQUEST_CODE_SIGN_ENCRYPT = 12;
+
 
     /**
      * Regular expression to remove the first localized "Re:" prefix in subjects.
@@ -305,6 +316,10 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     private View mEncryptLayout;
     private CheckBox mCryptoSignatureCheckbox;
     private CheckBox mEncryptCheckbox;
+    private CheckBox triadPrimusEncryption;
+    private CheckBox dsCheckbox;
+    private LinearLayout triadPrimusLayout;
+    private EditText triadPrimusKey;
     private TextView mCryptoSignatureUserId;
     private TextView mCryptoSignatureUserIdRest;
 
@@ -596,6 +611,14 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         mAddBccFromContacts = (ImageButton) findViewById(R.id.add_bcc);
         mCcWrapper = (LinearLayout) findViewById(R.id.cc_wrapper);
         mBccWrapper = (LinearLayout) findViewById(R.id.bcc_wrapper);
+
+        triadPrimusEncryption = (CheckBox) findViewById(R.id.tp_checkbox);
+        triadPrimusLayout = (LinearLayout) findViewById(R.id.tp_key_layout);
+        triadPrimusLayout.setVisibility(View.GONE);
+        triadPrimusKey = (EditText) findViewById(R.id.tp_key);
+        dsCheckbox = (CheckBox) findViewById(R.id.ds_check_box);
+
+
 
         if (mAccount.isAlwaysShowCcBcc()) {
             onAddCcBcc();
@@ -934,6 +957,14 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         updateMessageFormat();
 
         setTitle();
+
+        /*Set Onclick listener eccEnryption*/
+        triadPrimusEncryption.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if(triadPrimusEncryption.isChecked()) triadPrimusLayout.setVisibility(View.VISIBLE);
+                else triadPrimusLayout.setVisibility(View.GONE);
+            }
+        });
     }
 
     @Override
@@ -1776,6 +1807,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     }
 
     private void onSend() {
+
         if (getAddresses(mToView).length == 0 && getAddresses(mCcView).length == 0 && getAddresses(mBccView).length == 0) {
             mToView.setError(getString(R.string.message_compose_error_no_recipients));
             Toast.makeText(this, getString(R.string.message_compose_error_no_recipients), Toast.LENGTH_LONG).show();
@@ -1796,10 +1828,25 @@ public class MessageCompose extends K9Activity implements OnClickListener,
 
     private void performSend() {
         final CryptoProvider crypto = mAccount.getCryptoProvider();
+        Toast toast = Toast.makeText(this,"Going no where",Toast.LENGTH_LONG);
+        if(triadPrimusEncryption.isChecked()){
+            String data = mMessageContentView.getCharacters();
+            String cipher;
+            String key = triadPrimusKey.getText().toString();
+            try {
+                //Untuk encrypt
+                TriadPrimus tpe = new TriadPrimus(data, key);
+                cipher = tpe.Encrypt();
+                mMessageContentView.setText(cipher);
+            } catch (UnsupportedEncodingException ex) {
+                System.out.print(ex);
+                return;
+            }
+        }
 
         if (mOpenPgpProvider != null) {
             // OpenPGP Provider API
-
+            toast = Toast.makeText(this,"OpenPGP Provider API",Toast.LENGTH_LONG);
             // If not already encrypted but user wants to encrypt...
             if (mPgpData.getEncryptedData() == null &&
                     (mEncryptCheckbox.isChecked() || mCryptoSignatureCheckbox.isChecked())) {
@@ -1833,7 +1880,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             }
         } else if (crypto.isAvailable(this)) {
             // Legacy APG API
-
+            toast = Toast.makeText(this,mEncryptCheckbox.isChecked()+" "+ mPgpData.hasEncryptionKeys(),Toast.LENGTH_LONG);
             if (mEncryptCheckbox.isChecked() && !mPgpData.hasEncryptionKeys()) {
                 // key selection before encryption
                 StringBuilder emails = new StringBuilder();
@@ -2252,6 +2299,27 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             return;
         }
 
+        if(resultCode == RESULT_OK && requestCode == PICK_KEY_REQUEST){
+            try
+            {
+                String message = mMessageContentView.getCharacters();
+                ECCEG elgamal = new ECCEG(EllipticalCurve.P192.equation,EllipticalCurve.P192.Prime,
+                        EllipticalCurve.P192.basePoint, EllipticalCurve.P192.order);
+                elgamal.setPrivateKey(new BigInteger(data.getStringExtra("private_key")));
+                String ds=elgamal.digitalSignature(message);
+                String digitalSign = "*** Begin of digital signature ****\n"
+                         + ds
+                         + "\n*** End of digital signature ****";
+                mSignatureView.setText(digitalSign);
+                onSend();
+            }
+            catch(Exception e)
+            {
+                e.printStackTrace();
+            }
+            return;
+        }
+
         if (mAccount.getCryptoProvider().onActivityResult(this, requestCode, resultCode, data, mPgpData)) {
             return;
         }
@@ -2435,6 +2503,15 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         }
     }
 
+    private void updateSignature(String signature){
+        if (mIdentity.getSignatureUse()) {
+            mSignatureView.setCharacters(signature);
+            mSignatureView.setVisibility(View.VISIBLE);
+        } else {
+            mSignatureView.setVisibility(View.GONE);
+        }
+    }
+
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
@@ -2519,7 +2596,11 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         switch (item.getItemId()) {
             case R.id.send:
                 mPgpData.setEncryptionKeys(null);
-                onSend();
+                if(dsCheckbox.isChecked()){
+                    //Bring to choose key
+                    Intent intent = new Intent(MessageCompose.this, PickKey.class);
+                    startActivityForResult(intent,PICK_KEY_REQUEST);
+                }else onSend();
                 break;
             case R.id.save:
                 if (mEncryptCheckbox.isChecked()) {

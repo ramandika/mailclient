@@ -14,7 +14,6 @@ import com.fsck.k9.helper.HtmlConverter;
 
 public class MessageWebView extends RigidWebView {
 
-
     public MessageWebView(Context context) {
         super(context);
     }
@@ -128,6 +127,7 @@ public class MessageWebView extends RigidWebView {
         loadDataWithBaseURL("about:blank", content, "text/html", "utf-8", null);
         resumeTimers();
     }
+
 
     /*
      * Emulate the shift key being pressed to trigger the text selection mode

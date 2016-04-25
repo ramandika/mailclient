@@ -21,7 +21,27 @@
 	        <include layout="@layout/message_view_header"/>
 	
 	        <!-- Content area -->
-	        <com.fsck.k9.view.MessageWebView
+
+			<LinearLayout
+				android:orientation="horizontal"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_gravity="center_horizontal">
+
+				<Button
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="Validate DS"
+					android:id="@+id/validate_ds" />
+
+				<Button
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="Decrypt Message"
+					android:id="@+id/decrypt" />
+			</LinearLayout>
+
+			<com.fsck.k9.view.MessageWebView
 	            android:id="@+id/message_content"
 	            android:layout_height="wrap_content"
 	            android:layout_width="fill_parent"/>

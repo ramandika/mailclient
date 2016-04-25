@@ -1,18 +1,15 @@
 package com.fsck.k9.fragment;
 
-import java.io.File;
-import java.util.Collections;
-import java.util.Locale;
-
 import android.app.Activity;
+import android.app.DialogFragment;
 import android.app.Fragment;
+import android.app.FragmentManager;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
-import android.app.DialogFragment;
-import android.app.FragmentManager;
 import android.util.Log;
 import android.view.ContextThemeWrapper;
 import android.view.KeyEvent;
@@ -20,6 +17,10 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.ViewGroup;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.Toast;
 
 import com.fsck.k9.Account;
@@ -28,9 +29,12 @@ import com.fsck.k9.Preferences;
 import com.fsck.k9.R;
 import com.fsck.k9.activity.ChooseFolder;
 import com.fsck.k9.activity.MessageReference;
+import com.fsck.k9.activity.PickKey;
 import com.fsck.k9.controller.MessagingController;
 import com.fsck.k9.controller.MessagingListener;
 import com.fsck.k9.crypto.CryptoProvider.CryptoDecryptCallback;
+import com.fsck.k9.crypto.ECCElgamal.ECCEG;
+import com.fsck.k9.crypto.ECCElgamal.EllipticalCurve;
 import com.fsck.k9.crypto.PgpData;
 import com.fsck.k9.fragment.ConfirmationDialogFragment.ConfirmationDialogFragmentListener;
 import com.fsck.k9.helper.FileBrowserHelper;
@@ -47,6 +51,11 @@ import com.fsck.k9.view.SingleMessageView;
 
 import org.openintents.openpgp.OpenPgpSignatureResult;
 
+import java.io.File;
+import java.math.BigInteger;
+import java.util.Collections;
+import java.util.Locale;
+
 
 public class MessageViewFragment extends Fragment implements OnClickListener,
         CryptoDecryptCallback, ConfirmationDialogFragmentListener {
@@ -59,6 +68,7 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
     private static final int ACTIVITY_CHOOSE_FOLDER_MOVE = 1;
     private static final int ACTIVITY_CHOOSE_FOLDER_COPY = 2;
     private static final int ACTIVITY_CHOOSE_DIRECTORY = 3;
+    private static final int PICK_KEY_REQUEST=6;
 
 
     public static MessageViewFragment newInstance(MessageReference reference) {
@@ -81,6 +91,9 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
     private Listener mListener = new Listener();
     private MessageViewHandler mHandler = new MessageViewHandler();
     private LayoutInflater mLayoutInflater;
+    private Button validateDS;
+    private Button decryptMessage;
+    private WebView wv;
 
     /** this variable is used to save the calling AttachmentView
      *  until the onActivityResult is called.
@@ -189,6 +202,17 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
 
         mController = MessagingController.getInstance(getActivity().getApplication());
         mInitialized = true;
+
+
+    }
+
+
+    class LoadListener{
+        @JavascriptInterface
+        public String processHTML(String html)
+        {
+            return html;
+        }
     }
 
     @Override
@@ -199,8 +223,30 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
         mLayoutInflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         View view = mLayoutInflater.inflate(R.layout.message, container, false);
 
+        wv = ((WebView)getView().findViewById(R.id.message_content));
+        wv.getSettings().setJavaScriptEnabled(true);
+        wv.addJavascriptInterface(new LoadListener(), "HTMLOUT");
+
+        wv.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+
+                return true;
+            }
+
+            @Override
+            public void onPageStarted(WebView view, String url,
+                                      Bitmap favicon) {
+            }
+
+            public void onPageFinished(WebView view, String url) {
+                view.loadUrl("javascript:window.HTMLOUT.processHTML('<html>'+document.getElementsByTagName('html')[0].innerHTML+'</html>');");
+            }
+        });
 
         mMessageView = (SingleMessageView) view.findViewById(R.id.message_view);
+        validateDS = (Button) view.findViewById(R.id.validate_ds);
+        decryptMessage = (Button) view.findViewById(R.id.decrypt);
 
         //set a callback for the attachment view. With this callback the attachmentview
         //request the start of a filebrowser activity.
@@ -232,6 +278,16 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
 
         mMessageView.initialize(this);
         mMessageView.downloadRemainderButton().setOnClickListener(this);
+
+        validateDS.setOnClickListener(new OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                Intent pickKey = new Intent(getActivity(), PickKey.class);
+                startActivityForResult(pickKey, PICK_KEY_REQUEST);
+            }
+        });
 
         mFragmentListener.messageHeaderViewAvailable(mMessageView.getMessageHeaderView());
 
@@ -436,6 +492,33 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
         }
 
         switch (requestCode) {
+            case PICK_KEY_REQUEST:{
+                try{
+                    String fullMessage = wv.get
+                    String publicKey = data.getStringExtra("public_key");
+                    String x = publicKey.substring(publicKey.indexOf('[')+1,publicKey.indexOf(','));
+
+                    Log.d("varx",x);
+                    String y = publicKey.substring(publicKey.indexOf(',')+1,publicKey.indexOf(']'));
+
+                    Log.d("vary",y);
+                    Log.d("full_message",fullMessage);
+
+                    EllipticalCurve.Point publicPoint = new EllipticalCurve.Point(new BigInteger(x),new BigInteger(y));
+                    String message = fullMessage.substring(0,fullMessage.indexOf("*** Begin of digital signature ****"));
+                    Log.d("full_message",message);
+                    String ds = fullMessage.substring(fullMessage.indexOf("*** Begin of digital signature ****")+1,fullMessage.indexOf("*** End of digital signature ****"));
+                    ECCEG elgamal = new ECCEG(EllipticalCurve.P192.equation,EllipticalCurve.P192.Prime,
+                            EllipticalCurve.P192.basePoint, EllipticalCurve.P192.order);
+                    elgamal.setPublicKey(publicPoint);
+                    Boolean valid = elgamal.verifyDS(message.trim(),ds.trim());
+                    Toast t = Toast.makeText(getActivity(),valid ? "true" : "false",Toast.LENGTH_LONG);
+                    t.show();
+                }catch (Exception e){
+                    Log.e("exceptionea",e.toString());
+                }
+                break;
+            }
             case ACTIVITY_CHOOSE_DIRECTORY: {
                 if (resultCode == Activity.RESULT_OK && data != null) {
                     // obtain the filename

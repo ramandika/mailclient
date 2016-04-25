@@ -104,6 +104,12 @@
             >
         </activity>
         <activity
+            android:name=".activity.PickKey"
+            android:label="@string/font_size_settings_title"
+            android:configChanges="locale"
+            >
+        </activity>
+        <activity
             android:name=".activity.setup.AccountSetupBasics"
             android:label="@string/account_setup_basics_title"
             android:configChanges="locale"

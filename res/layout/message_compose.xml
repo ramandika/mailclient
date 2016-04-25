@@ -202,6 +202,49 @@
                     instances of message_compose_attachment.xml in here.
                 -->
                 <LinearLayout
+                    android:orientation="horizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent">
+
+                    <CheckBox
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ECC Elgamal Encryption"
+                        android:id="@+id/tp_checkbox"
+                        android:checked="false" />
+
+                    <CheckBox
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Digital Signature"
+                        android:id="@+id/ds_check_box"
+                        android:checked="false"
+                        android:layout_marginLeft="10dp"/>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:orientation="horizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:id="@+id/tp_key_layout">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?android:attr/textAppearanceMedium"
+                        android:text="Key : "
+                        android:id="@+id/textView" />
+
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:id="@+id/tp_key"
+                        android:layout_gravity="center_horizontal"
+                        android:inputType="text" />
+                </LinearLayout>
+
+                <LinearLayout
                     android:id="@+id/attachments"
                     android:layout_width="fill_parent"
                     android:layout_height="wrap_content"
