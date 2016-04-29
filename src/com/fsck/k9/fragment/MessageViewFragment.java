@@ -6,7 +6,6 @@ import android.app.Fragment;
 import android.app.FragmentManager;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -18,9 +17,9 @@ import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.fsck.k9.Account;
@@ -36,9 +35,12 @@ import com.fsck.k9.crypto.CryptoProvider.CryptoDecryptCallback;
 import com.fsck.k9.crypto.ECCElgamal.ECCEG;
 import com.fsck.k9.crypto.ECCElgamal.EllipticalCurve;
 import com.fsck.k9.crypto.PgpData;
+import com.fsck.k9.crypto.SHA1;
+import com.fsck.k9.crypto.TriadPrimus.TriadPrimus;
 import com.fsck.k9.fragment.ConfirmationDialogFragment.ConfirmationDialogFragmentListener;
 import com.fsck.k9.helper.FileBrowserHelper;
 import com.fsck.k9.helper.FileBrowserHelper.FileBrowserFailOverCallback;
+import com.fsck.k9.helper.HtmlConverter;
 import com.fsck.k9.mail.Flag;
 import com.fsck.k9.mail.Message;
 import com.fsck.k9.mail.MessagingException;
@@ -93,7 +95,9 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
     private LayoutInflater mLayoutInflater;
     private Button validateDS;
     private Button decryptMessage;
-    private WebView wv;
+    private EditText password;
+    private TextView plainMessageView;
+    private String realText;
 
     /** this variable is used to save the calling AttachmentView
      *  until the onActivityResult is called.
@@ -199,10 +203,8 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
 
         // This fragments adds options to the action bar
         setHasOptionsMenu(true);
-
         mController = MessagingController.getInstance(getActivity().getApplication());
         mInitialized = true;
-
 
     }
 
@@ -215,6 +217,7 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
         }
     }
 
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
             Bundle savedInstanceState) {
@@ -223,30 +226,38 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
         mLayoutInflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         View view = mLayoutInflater.inflate(R.layout.message, container, false);
 
-        wv = ((WebView)getView().findViewById(R.id.message_content));
-        wv.getSettings().setJavaScriptEnabled(true);
-        wv.addJavascriptInterface(new LoadListener(), "HTMLOUT");
-
-        wv.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-
-                return true;
-            }
-
-            @Override
-            public void onPageStarted(WebView view, String url,
-                                      Bitmap favicon) {
-            }
-
-            public void onPageFinished(WebView view, String url) {
-                view.loadUrl("javascript:window.HTMLOUT.processHTML('<html>'+document.getElementsByTagName('html')[0].innerHTML+'</html>');");
-            }
-        });
+        plainMessageView = (TextView) view.findViewById(R.id.message_plain);
 
         mMessageView = (SingleMessageView) view.findViewById(R.id.message_view);
+
         validateDS = (Button) view.findViewById(R.id.validate_ds);
         decryptMessage = (Button) view.findViewById(R.id.decrypt);
+        password = (EditText) view.findViewById(R.id.key_crypto);
+        decryptMessage.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                try{
+                    String keyKrypto = password.getText().toString();
+                    if(keyKrypto.length()>0){
+                        String fullMessage= mMessageView.getmText();//plainMessageView.getText().toString();
+                        Log.e("cipher",fullMessage);
+/*                    String beginning =  "*** Begin of digital signature ****\n";
+                    String end = "\n*** End of digital signature ****";
+                    String message = fullMessage.substring(0,fullMessage.indexOf(beginning)-1);*/
+                        try{
+                            TriadPrimus tpd = new TriadPrimus(fullMessage, keyKrypto);
+                            String plain = tpd.Decrypt();
+                            plainMessageView.setText(plain);
+                            password.setEnabled(false);
+                        }catch (Exception e) { e.printStackTrace(); }
+                    }else{
+                        Toast t = Toast.makeText(view.getContext(),"Please Fill Key",Toast.LENGTH_LONG);
+                        t.show();
+                    }
+                }catch (Exception e){ e.printStackTrace(); }
+
+            }
+        });
 
         //set a callback for the attachment view. With this callback the attachmentview
         //request the start of a filebrowser activity.
@@ -294,14 +305,18 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
         return view;
     }
 
+
+
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
+
         super.onActivityCreated(savedInstanceState);
 
         MessageReference messageReference;
         if (savedInstanceState != null) {
             mPgpData = (PgpData) savedInstanceState.get(STATE_PGP_DATA);
             messageReference = (MessageReference) savedInstanceState.get(STATE_MESSAGE_REFERENCE);
+            realText = (String) savedInstanceState.get("realText");
         } else {
             Bundle args = getArguments();
             messageReference = (MessageReference) args.getParcelable(ARG_REFERENCE);
@@ -315,6 +330,7 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
         super.onSaveInstanceState(outState);
         outState.putParcelable(STATE_MESSAGE_REFERENCE, mMessageReference);
         outState.putSerializable(STATE_PGP_DATA, mPgpData);
+        outState.putString("realText",realText);
     }
 
     public void displayMessage(MessageReference ref) {
@@ -494,25 +510,27 @@ public class MessageViewFragment extends Fragment implements OnClickListener,
         switch (requestCode) {
             case PICK_KEY_REQUEST:{
                 try{
-                    String fullMessage = wv.get
+                    String fullMessage= HtmlConverter.htmlToText(mMessageView.getmText());//plainMessageView.getText().toString();
                     String publicKey = data.getStringExtra("public_key");
                     String x = publicKey.substring(publicKey.indexOf('[')+1,publicKey.indexOf(','));
 
-                    Log.d("varx",x);
                     String y = publicKey.substring(publicKey.indexOf(',')+1,publicKey.indexOf(']'));
 
-                    Log.d("vary",y);
-                    Log.d("full_message",fullMessage);
-
                     EllipticalCurve.Point publicPoint = new EllipticalCurve.Point(new BigInteger(x),new BigInteger(y));
-                    String message = fullMessage.substring(0,fullMessage.indexOf("*** Begin of digital signature ****"));
-                    Log.d("full_message",message);
-                    String ds = fullMessage.substring(fullMessage.indexOf("*** Begin of digital signature ****")+1,fullMessage.indexOf("*** End of digital signature ****"));
+                    String beginning =  "*** Begin of digital signature ****\n";
+                    String end = "\n*** End of digital signature ****";
+                    String message = fullMessage.substring(0,fullMessage.indexOf(beginning)-1);
+
+                    String ds = fullMessage.substring(fullMessage.indexOf(beginning)+beginning.length(),fullMessage.indexOf(end));
                     ECCEG elgamal = new ECCEG(EllipticalCurve.P192.equation,EllipticalCurve.P192.Prime,
                             EllipticalCurve.P192.basePoint, EllipticalCurve.P192.order);
                     elgamal.setPublicKey(publicPoint);
-                    Boolean valid = elgamal.verifyDS(message.trim(),ds.trim());
-                    Toast t = Toast.makeText(getActivity(),valid ? "true" : "false",Toast.LENGTH_LONG);
+                    Log.e("message", message);
+                    Log.e("SHA1", SHA1.encode(message));
+                    Log.e("ds",ds);
+                    message = message.trim();
+                    Boolean valid = elgamal.verifyDS(SHA1.encode(message),ds);
+                    Toast t = Toast.makeText(getActivity(),valid+"",Toast.LENGTH_LONG);
                     t.show();
                 }catch (Exception e){
                     Log.e("exceptionea",e.toString());

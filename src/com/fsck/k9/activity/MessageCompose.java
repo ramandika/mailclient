@@ -1827,23 +1827,37 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     }
 
     private void performSend() {
+
         final CryptoProvider crypto = mAccount.getCryptoProvider();
         Toast toast = Toast.makeText(this,"Going no where",Toast.LENGTH_LONG);
-        if(triadPrimusEncryption.isChecked()){
+        if(triadPrimusEncryption.isChecked() && !dsCheckbox.isChecked()){
+            if(triadPrimusKey.getText().toString().length()<=0){
+                Toast t = Toast.makeText(this,"Please input password",Toast.LENGTH_LONG);
+                t.show();
+                return;
+            }
             String data = mMessageContentView.getCharacters();
             String cipher;
             String key = triadPrimusKey.getText().toString();
             try {
                 //Untuk encrypt
                 TriadPrimus tpe = new TriadPrimus(data, key);
-                cipher = tpe.Encrypt();
+                cipher = new String(tpe.Encrypt().getBytes(),"ISO-8859-1");
                 mMessageContentView.setText(cipher);
             } catch (UnsupportedEncodingException ex) {
                 System.out.print(ex);
                 return;
             }
         }
-
+/*        if(true){
+            String cipher = mMessageContentView.getCharactersOri();
+            Log.e("cipher",cipher);
+            try{
+                TriadPrimus tpd = new TriadPrimus(cipher,"kripto");
+                Log.e("plain",tpd.Decrypt());
+            }catch (Exception e){ e.printStackTrace(); }
+            return;
+        }*/
         if (mOpenPgpProvider != null) {
             // OpenPGP Provider API
             toast = Toast.makeText(this,"OpenPGP Provider API",Toast.LENGTH_LONG);
@@ -2302,7 +2316,27 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         if(resultCode == RESULT_OK && requestCode == PICK_KEY_REQUEST){
             try
             {
-                String message = mMessageContentView.getCharacters();
+                //Kalau mau dienkrip
+/*                if(triadPrimusEncryption.isChecked()){
+                    if(triadPrimusKey.getText().toString().length()<=0){
+                        Toast t = Toast.makeText(this,"Please input password",Toast.LENGTH_LONG);
+                        t.show();
+                        return;
+                    }
+                    String plain = mMessageContentView.getCharactersOri();
+                    String cipher;
+                    String key = triadPrimusKey.getText().toString();
+                    try {
+                        //Untuk encrypt
+                        TriadPrimus tpe = new TriadPrimus(plain, key);
+                        cipher = tpe.Encrypt();
+                        mMessageContentView.setText(cipher);
+                    } catch (UnsupportedEncodingException ex) {
+                        System.out.print(ex);
+                        return;
+                    }
+                }*/
+                String message = mMessageContentView.getCharactersOri();
                 ECCEG elgamal = new ECCEG(EllipticalCurve.P192.equation,EllipticalCurve.P192.Prime,
                         EllipticalCurve.P192.basePoint, EllipticalCurve.P192.order);
                 elgamal.setPrivateKey(new BigInteger(data.getStringExtra("private_key")));
@@ -2310,7 +2344,29 @@ public class MessageCompose extends K9Activity implements OnClickListener,
                 String digitalSign = "*** Begin of digital signature ****\n"
                          + ds
                          + "\n*** End of digital signature ****";
+                Log.e("message",message);
+                Log.e("SHA1",SHA1.encode(message));
+                Log.e("ds",ds);
                 mSignatureView.setText(digitalSign);
+                mSignatureView.setEnabled(false);
+
+
+/*                //Cek apakah ds valid
+                ECCEG cekValid = new ECCEG(EllipticalCurve.P192.equation,EllipticalCurve.P192.Prime,
+                        EllipticalCurve.P192.basePoint, EllipticalCurve.P192.order);
+
+                String pK = data.getStringExtra("public_key");
+                String x = pK.substring(pK.indexOf('[')+1,pK.indexOf(','));
+
+                Log.e("varx",x);
+                String y = pK.substring(pK.indexOf(',')+1,pK.indexOf(']'));
+                Log.e("vary",y);
+
+                EllipticalCurve.Point point = new EllipticalCurve.Point(new BigInteger(x),new BigInteger(y));
+                cekValid.setPublicKey(point);
+                boolean valid = cekValid.verifyDS(SHA1.encode(message),ds);
+                Toast t = Toast.makeText(this,valid+"",Toast.LENGTH_LONG);
+                t.show();*/
                 onSend();
             }
             catch(Exception e)
@@ -4183,9 +4239,9 @@ public class MessageCompose extends K9Activity implements OnClickListener,
          *
          * @return A string with any line endings converted to {@code \r\n}.
          */
-        public String getCharacters() {
-            return getText().toString().replace("\n", "\r\n");
-        }
+        public String getCharacters() { return getText().toString().replace("\n", "\r\n");}
+
+        public String getCharactersOri() { return getText().toString(); }
 
         /**
          * Sets the string value of the EolConvertingEditText. Any line endings

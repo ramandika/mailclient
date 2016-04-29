@@ -1,11 +1,5 @@
 package com.fsck.k9.view;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.URL;
-import java.net.URLConnection;
-import java.net.URLDecoder;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.ActivityNotFoundException;
@@ -17,6 +11,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.text.Html;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.TypedValue;
@@ -34,6 +29,7 @@ import android.webkit.WebView;
 import android.webkit.WebView.HitTestResult;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.fsck.k9.Account;
@@ -60,6 +56,15 @@ import com.fsck.k9.mail.store.LocalStore.LocalMessage;
 import com.fsck.k9.provider.AttachmentProvider.AttachmentProviderColumns;
 
 import org.apache.commons.io.IOUtils;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLDecoder;
 
 
 public class SingleMessageView extends LinearLayout implements OnClickListener,
@@ -90,6 +95,7 @@ public class SingleMessageView extends LinearLayout implements OnClickListener,
     private MessageCryptoView mCryptoView;
     private MessageOpenPgpView mOpenPgpView;
     private MessageWebView mMessageContentView;
+    private TextView plainMessageView;
     private MessageHeader mHeaderContainer;
     private LinearLayout mAttachments;
     private Button mShowHiddenAttachments;
@@ -108,10 +114,12 @@ public class SingleMessageView extends LinearLayout implements OnClickListener,
     private ClipboardManager mClipboardManager;
     private String mText;
 
+    public String getmText(){return mText;}
 
     public void initialize(Fragment fragment) {
         Activity activity = fragment.getActivity();
-        mMessageContentView = (MessageWebView) findViewById(R.id.message_content);
+        mMessageContentView = (MessageWebView) findViewById(R.id.message_content); //webview
+        plainMessageView = (TextView) findViewById(R.id.message_plain);
         mMessageContentView.configure();
         activity.registerForContextMenu(mMessageContentView);
         mMessageContentView.setOnCreateContextMenuListener(this);
@@ -587,6 +595,8 @@ public class SingleMessageView extends LinearLayout implements OnClickListener,
 
     private void loadBodyFromText(String emailText) {
         mMessageContentView.setText(emailText);
+        mMessageContentView.setVisibility(GONE);
+        plainMessageView.setText(HtmlConverter.htmlToText(emailText));
     }
 
     public void updateCryptoLayout(CryptoProvider cp, PgpData pgpData, Message message) {

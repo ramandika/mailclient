@@ -4,7 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.util.Pair;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -26,7 +26,7 @@ import java.util.Set;
  */
 public class PickKey extends Activity {
     private Button keyGenerate;
-    ArrayList<Pair<String,String>> listobj;
+    ArrayList<Element> listobj;
     ArrayAdapter<View> adapter;
     ListView lview;
     /*
@@ -36,6 +36,18 @@ public class PickKey extends Activity {
     private int NOKEY;
     private SharedPreferences spKey;
     private SharedPreferences.Editor editor;
+
+    public class Element{
+        public String private_key;
+        public String public_key;
+        public String name;
+
+        public Element(String pvt,String pbk, String name){
+            this.private_key=pvt;
+            this.public_key=pbk;
+            this.name=name;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,11 +61,13 @@ public class PickKey extends Activity {
         NOKEY = spKey.getInt("NOKEY",0);
         editor = spKey.edit();
         Set<String> stringSet;
-        for(int i=1;;i++){
+        for(int i=1;i<=NOKEY;i++){
             stringSet = spKey.getStringSet("Key-"+i,null);
-            if(stringSet==null) break;
-            String[] publicPrivate = stringSet.toArray(new String[stringSet.size()]);
-            listobj.add(new Pair<String, String>(publicPrivate[0],publicPrivate[1]));
+            if(stringSet!=null) {
+                String[] publicPrivate = stringSet.toArray(new String[stringSet.size()]);
+                Log.d("FAQ",publicPrivate[0]+" "+publicPrivate[1]);
+                listobj.add(new Element(publicPrivate[0], publicPrivate[1],"Key-"+i));
+            }
         }
         adapter =new CustomAdapter(this,listobj);
         lview = (ListView) findViewById(R.id.listkey);
@@ -74,8 +88,8 @@ public class PickKey extends Activity {
                 editor.putStringSet("Key-"+NOKEY,keyset);
                 editor.putInt("NOKEY",NOKEY);
                 editor.commit();
-                listobj.add(new Pair<String, String>(elgamal.getPrivateKey().toString(),"["+elgamal.getPublicKey().getX()+","+
-                        elgamal.getPublicKey().getY()+"]"));
+                listobj.add(new Element(elgamal.getPrivateKey().toString(),"["+elgamal.getPublicKey().getX()+","+
+                        elgamal.getPublicKey().getY()+"]","Key-"+NOKEY));
                 adapter.notifyDataSetChanged();
             }
         });

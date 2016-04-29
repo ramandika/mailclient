@@ -39,6 +39,29 @@
 					android:layout_height="wrap_content"
 					android:text="Decrypt Message"
 					android:id="@+id/decrypt" />
+
+			</LinearLayout>
+
+			<LinearLayout
+				android:orientation="horizontal"
+				android:layout_width="match_parent"
+				android:layout_height="match_parent"
+				android:paddingBottom="30dp">
+
+				<TextView
+					android:gravity="center"
+					android:layout_weight="2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:textAppearance="?android:attr/textAppearanceMedium"
+                    android:text="Key : " />
+
+				<EditText
+					android:layout_weight="8"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:id="@+id/key_crypto" />
+
 			</LinearLayout>
 
 			<com.fsck.k9.view.MessageWebView
@@ -47,8 +70,15 @@
 	            android:layout_width="fill_parent"/>
 	
 	        <!-- Attachments area -->
-	
-	        <LinearLayout
+
+			<TextView
+				android:layout_width="match_parent"
+				android:layout_height="match_parent"
+				android:textAppearance="?android:attr/textAppearanceMedium"
+				android:layout_margin="10dp"
+				android:id="@+id/message_plain" />
+
+			<LinearLayout
 	            android:id="@+id/attachments_container"
 	            android:orientation="vertical"
 	            android:layout_width="fill_parent"
@@ -60,8 +90,8 @@
 	                android:layout_width="fill_parent"
 	                android:layout_height="wrap_content"
 	                android:padding="4dip" />
-	
-	            <Button
+
+				<Button
 	                android:id="@+id/show_hidden_attachments"
 	                android:layout_width="fill_parent"
 	                android:layout_height="wrap_content"
